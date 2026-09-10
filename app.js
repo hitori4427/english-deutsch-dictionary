@@ -148,7 +148,7 @@ function renderAlphabet() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=12').catch(() => {});
   });
 }
 
@@ -355,7 +355,7 @@ async function renderApp() {
   el('testBtn').addEventListener('click', testConfig);
 
   try {
-    const response = await fetch('dictionary.json', { cache: 'no-store' });
+    const response = await fetch('dictionary.json?v=12', { cache: 'no-store' });
     dictionary = await response.json();
     renderAlphabet();
     browseLetter('A');
