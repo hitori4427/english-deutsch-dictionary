@@ -151,7 +151,7 @@ function renderAlphabet() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=16').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=17').catch(() => {});
   });
 }
 
@@ -240,12 +240,12 @@ async function requestMiniMax(word) {
   const payload = {
     model,
     messages: [
-      { role: 'system', content: '你是英德辭典。只回傳一個有效 JSON 物件，不要 Markdown、說明或推理文字。' },
-      { role: 'user', content: `查詢英文單字 ${word}。JSON 欄位：english, german, article, displayGerman, chinese, partOfSpeech, plural, level, examples, learningTip, confidence。examples 請包含英文與德文例句。` }
+      { role: 'system', content: '你是英德辭典。只輸出精簡 JSON，不要解釋。' },
+      { role: 'user', content: `${word} 的英德查詞 JSON：english,german,article,chinese,partOfSpeech,plural,exampleEnglish,exampleGerman` }
     ],
     reasoning_split: true,
     temperature: 0.2,
-    max_completion_tokens: 900
+    max_completion_tokens: 2048
   };
 
   let lastError;
@@ -269,6 +269,16 @@ async function requestMiniMax(word) {
         const error = new Error(`HTTP ${res.status}${detail ? `：${String(detail).slice(0, 160)}` : ''}`);
         error.retryable = res.status === 429 || res.status >= 500;
         throw error;
+      }
+      let answerContent = '';
+      try { answerContent = String(JSON.parse(txt).choices?.[0]?.message?.content || '').trim(); } catch {}
+      if (!answerContent) {
+        lastError = new Error('MiniMax 只完成推理，沒有產生最後答案');
+        if (attempt === 1) {
+          payload.messages = [{ role: 'user', content: `只用一行 JSON 回答 ${word} 的德文：{"english":"","german":"","article":"","chinese":"","partOfSpeech":"","plural":"","exampleEnglish":"","exampleGerman":""}` }];
+          continue;
+        }
+        throw lastError;
       }
       return txt;
     } catch (err) {
@@ -313,7 +323,7 @@ function aiResultLines(data) {
   if (data.rawText) return [data.rawText];
   const examples = Array.isArray(data.examples)
     ? data.examples.map((item) => typeof item === 'string' ? item : `${item.english || item.en || ''} → ${item.german || item.de || ''}`).filter(Boolean).join('；')
-    : (data.examples || '—');
+    : (data.examples || ((data.exampleEnglish || data.exampleGerman) ? `${data.exampleEnglish || ''} → ${data.exampleGerman || ''}` : '—'));
   return [
     `${data.english || ''} → ${data.displayGerman || data.german || '—'}`,
     `冠詞／詞類：${data.article || '—'} · ${data.partOfSpeech || '—'}`,
@@ -443,7 +453,7 @@ async function renderApp() {
   el('testBtn').addEventListener('click', testConfig);
 
   try {
-    const response = await fetch('dictionary.json?v=16', { cache: 'no-store' });
+    const response = await fetch('dictionary.json?v=17', { cache: 'no-store' });
     dictionary = await response.json();
     renderAlphabet();
     browseLetter('A');
