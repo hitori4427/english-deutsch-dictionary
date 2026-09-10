@@ -15,6 +15,10 @@ p { margin: 0; color: var(--muted); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 .hidden { display: none; }
 .topbar { margin-bottom: 10px; }
+.alphabet { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; margin: 10px 0; }
+.alphabet button { min-height: 38px; padding: 7px 2px; font-weight: 700; background: #17233a; }
+.alphabet button.active { background: linear-gradient(120deg, #0ea5e9, #2563eb); }
+.browse-heading { margin: 12px 2px 4px; color: var(--muted); font-size: 0.9rem; }
 label { display: block; margin: 6px 0 4px; color: #cbd5e1; font-size: 0.92rem; }
 input, button, select { width: 100%; border: 1px solid var(--line); background: #0b1220; color: var(--text); border-radius: 10px; padding: 10px; font-size: 1rem; }
 button { background: linear-gradient(120deg, #0ea5e9, #2563eb); border: none; }
@@ -36,4 +40,5 @@ small { color: #94a3b8; }
 summary { cursor: pointer; }
 @media (max-width: 520px) {
   .app { padding: 10px; }
+  .alphabet { grid-template-columns: repeat(7, 1fr); gap: 5px; }
 }

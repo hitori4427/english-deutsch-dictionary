@@ -1,5 +1,5 @@
-const defaultModels = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.dictionaryModelOptions) || ['MiniMax-01', 'm2.7', 'm3'];
-const defaultEndpoint = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultEndpoint) || 'https://api.minimax.com/v1/text/chat/completion';
+const defaultModels = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.dictionaryModelOptions) || ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5', 'MiniMax-M2'];
+const defaultEndpoint = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultEndpoint) || 'https://api.minimax.io/v1/chat/completions';
 const defaultTimeout = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultTimeoutSeconds) || 15;
 const passHash = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.accessPassHash) || '';
 
@@ -115,6 +115,35 @@ function renderSuggestions(list) {
   });
 }
 
+function entriesForLetter(letter) {
+  return dictionary
+    .filter((entry) => normalize(entry.englishWord).startsWith(letter.toLowerCase()))
+    .sort((a, b) => a.englishWord.localeCompare(b.englishWord, 'en'));
+}
+
+function browseLetter(letter) {
+  el('searchInput').value = '';
+  document.querySelectorAll('#alphabetNav button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.letter === letter);
+  });
+  const entries = entriesForLetter(letter);
+  el('browseHeading').textContent = `${letter} 開頭 · ${entries.length} 個單字`;
+  renderSuggestions(entries);
+}
+
+function renderAlphabet() {
+  const nav = el('alphabetNav');
+  nav.innerHTML = '';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((letter) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.letter = letter;
+    button.textContent = letter;
+    button.addEventListener('click', () => browseLetter(letter));
+    nav.appendChild(button);
+  });
+}
+
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -148,10 +177,12 @@ function toggleFavorite(key) {
 }
 
 function loadSettingsToUI() {
+  const savedEndpoint = localStorage.getItem('ed_endpoint') || '';
+  const savedModel = localStorage.getItem('ed_model') || '';
   const settings = {
     apiKey: localStorage.getItem('ed_api_key') || '',
-    endpoint: localStorage.getItem('ed_endpoint') || defaultEndpoint,
-    model: localStorage.getItem('ed_model') || defaultModels[0],
+    endpoint: !savedEndpoint || savedEndpoint.includes('api.minimax.com/v1/text/chat/completion') ? defaultEndpoint : savedEndpoint,
+    model: defaultModels.includes(savedModel) ? savedModel : defaultModels[0],
     timeout: Number(localStorage.getItem('ed_timeout') || defaultTimeout),
   };
 
@@ -167,6 +198,8 @@ function loadSettingsToUI() {
   el('apiKey').value = settings.apiKey;
   el('endpoint').value = settings.endpoint;
   el('timeout').value = settings.timeout;
+  localStorage.setItem('ed_endpoint', settings.endpoint);
+  localStorage.setItem('ed_model', settings.model);
 
   el('apiKey').addEventListener('change', () => {
     localStorage.setItem('ed_api_key', el('apiKey').value.trim());
@@ -188,25 +221,23 @@ function loadSettingsToUI() {
   }
 }
 
-async function aiLookup(word) {
+async function requestMiniMax(word) {
   const apiKey = (el('apiKey').value || '').trim();
   const endpoint = (el('endpoint').value || defaultEndpoint).trim();
   const model = el('modelSelect').value || defaultModels[0];
   const timeout = Number(el('timeout').value) || defaultTimeout;
 
   if (!apiKey) {
-    el('settingsInfo').textContent = '尚未設定 API Key，無法進行 AI 查詢。';
-    return false;
+    throw new Error('尚未設定 API Key');
   }
   const payload = {
     model,
     messages: [{ role: 'user', content: `請用 JSON 格式回傳：english, german, article, displayGerman, chinese, partOfSpeech, plural, level, examples, learningTip, confidence for ${word}` }],
-    response_format: 'json'
+    max_completion_tokens: 700
   };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(5000, timeout * 1000));
-  el('aiResult').textContent = '查詢中...';
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -217,13 +248,36 @@ async function aiLookup(word) {
       },
       body: JSON.stringify(payload),
     });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const txt = await res.text();
-    el('aiResult').innerHTML = `<span class="success">AI 回應：</span>${txt.slice(0, 350)}`;
+    if (!res.ok) {
+      let detail = txt;
+      try {
+        const parsed = JSON.parse(txt);
+        detail = parsed.error?.message || parsed.base_resp?.status_msg || txt;
+      } catch {}
+      throw new Error(`HTTP ${res.status}${detail ? `：${String(detail).slice(0, 160)}` : ''}`);
+    }
+    return txt;
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error(`連線超過 ${timeout} 秒，已停止測試`);
+    if (err instanceof TypeError) throw new Error('瀏覽器無法連線 MiniMax；請檢查網路、Endpoint 或跨網域限制');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function aiLookup(word) {
+  const output = el('aiResult');
+  output.textContent = '查詢中...';
+  try {
+    const txt = await requestMiniMax(word);
+    let answer = txt;
+    try { answer = JSON.parse(txt).choices?.[0]?.message?.content || txt; } catch {}
+    output.innerHTML = `<span class="success">AI 回應：</span>${String(answer).slice(0, 1000)}`;
     return true;
   } catch (err) {
-    el('aiResult').innerHTML = `<span class="error">查詢失敗：</span>${err.message}`;
+    output.innerHTML = `<span class="error">查詢失敗：</span>${err.message}`;
     return false;
   }
 }
@@ -235,8 +289,15 @@ async function testConfig() {
     return;
   }
   el('settingsInfo').textContent = '測試中...';
-  const ok = await aiLookup('apple');
-  el('settingsInfo').textContent = ok ? '測試成功：可連線到 MiniMax。' : '測試失敗：無法連線到 MiniMax。';
+  el('testBtn').disabled = true;
+  try {
+    await requestMiniMax('apple');
+    el('settingsInfo').textContent = '測試成功：可連線到 MiniMax。';
+  } catch (err) {
+    el('settingsInfo').textContent = `測試失敗：${err.message}`;
+  } finally {
+    el('testBtn').disabled = false;
+  }
 }
 
 
@@ -247,9 +308,11 @@ function bindSearch() {
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => {
       if (!q) {
-        renderSuggestions([]);
+        browseLetter('A');
         return;
       }
+      document.querySelectorAll('#alphabetNav button').forEach((button) => button.classList.remove('active'));
+      el('browseHeading').textContent = `搜尋「${q}」`;
       const result = dictionary
         .filter((entry) => {
           const en = normalize(entry.englishWord);
@@ -294,6 +357,8 @@ async function renderApp() {
   try {
     const response = await fetch('dictionary.json', { cache: 'no-store' });
     dictionary = await response.json();
+    renderAlphabet();
+    browseLetter('A');
   } catch {
     dictionary = [];
   }

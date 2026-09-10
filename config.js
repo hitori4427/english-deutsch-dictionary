@@ -1,7 +1,7 @@
 window.ED_WEB_CONFIG = {
   accessPassHash: "",
-  dictionaryModelOptions: ["MiniMax-01", "m2.7", "m3"],
-  defaultEndpoint: "https://api.minimax.com/v1/text/chat/completion",
+  dictionaryModelOptions: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2"],
+  defaultEndpoint: "https://api.minimax.io/v1/chat/completions",
   defaultTimeoutSeconds: 15,
-  defaultVersion: "1.1"
+  defaultVersion: "1.2"
 };
