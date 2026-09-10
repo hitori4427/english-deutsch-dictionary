@@ -1,6 +1,6 @@
 const defaultModels = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.dictionaryModelOptions) || ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5', 'MiniMax-M2'];
 const defaultEndpoint = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultEndpoint) || 'https://api.minimax.io/v1/chat/completions';
-const defaultTimeout = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultTimeoutSeconds) || 15;
+const defaultTimeout = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.defaultTimeoutSeconds) || 60;
 const passHash = (window.ED_WEB_CONFIG && window.ED_WEB_CONFIG.accessPassHash) || '';
 
 const el = (id) => document.getElementById(id);
@@ -151,7 +151,7 @@ function renderAlphabet() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=14').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=15').catch(() => {});
   });
 }
 
@@ -182,11 +182,12 @@ function toggleFavorite(key) {
 function loadSettingsToUI() {
   const savedEndpoint = localStorage.getItem('ed_endpoint') || '';
   const savedModel = localStorage.getItem('ed_model') || '';
+  const storedTimeout = Number(localStorage.getItem('ed_timeout') || 0);
   const settings = {
     apiKey: localStorage.getItem('ed_api_key') || '',
     endpoint: !savedEndpoint || savedEndpoint.includes('api.minimax.com/v1/text/chat/completion') ? defaultEndpoint : savedEndpoint,
     model: defaultModels.includes(savedModel) ? savedModel : defaultModels[0],
-    timeout: Number(localStorage.getItem('ed_timeout') || defaultTimeout),
+    timeout: !storedTimeout || storedTimeout <= 15 ? defaultTimeout : storedTimeout,
   };
 
   const modelSelect = el('modelSelect');
@@ -203,6 +204,7 @@ function loadSettingsToUI() {
   el('timeout').value = settings.timeout;
   localStorage.setItem('ed_endpoint', settings.endpoint);
   localStorage.setItem('ed_model', settings.model);
+  localStorage.setItem('ed_timeout', String(settings.timeout));
 
   el('apiKey').addEventListener('change', () => {
     localStorage.setItem('ed_api_key', el('apiKey').value.trim());
@@ -240,7 +242,7 @@ async function requestMiniMax(word) {
       { role: 'user', content: `查詢英文單字 ${word}。JSON 欄位：english, german, article, displayGerman, chinese, partOfSpeech, plural, level, examples, learningTip, confidence。examples 請包含英文與德文例句。` }
     ],
     reasoning_split: true,
-    max_completion_tokens: 900
+    max_completion_tokens: 600
   };
 
   const controller = new AbortController();
@@ -266,7 +268,7 @@ async function requestMiniMax(word) {
     }
     return txt;
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error(`連線超過 ${timeout} 秒，已停止測試`);
+    if (err.name === 'AbortError') throw new Error(`AI 回應超過 ${timeout} 秒，已停止查詢；可改用 highspeed 模型或提高秒數`);
     if (err instanceof TypeError) throw new Error('瀏覽器無法連線 MiniMax；請檢查網路、Endpoint 或跨網域限制');
     throw err;
   } finally {
@@ -343,8 +345,10 @@ async function testConfig() {
   el('settingsInfo').textContent = '測試中...';
   el('testBtn').disabled = true;
   try {
-    await requestMiniMax('apple');
-    el('settingsInfo').textContent = '測試成功：可連線到 MiniMax。';
+    const txt = await requestMiniMax('apple');
+    const result = extractAIContent(txt);
+    if (!result.german && !result.displayGerman) throw new Error('有收到回應，但缺少德文翻譯');
+    el('settingsInfo').textContent = '測試成功：連線、完整查詞及結果解析皆正常。';
   } catch (err) {
     el('settingsInfo').textContent = `測試失敗：${err.message}`;
   } finally {
@@ -428,7 +432,7 @@ async function renderApp() {
   el('testBtn').addEventListener('click', testConfig);
 
   try {
-    const response = await fetch('dictionary.json?v=14', { cache: 'no-store' });
+    const response = await fetch('dictionary.json?v=15', { cache: 'no-store' });
     dictionary = await response.json();
     renderAlphabet();
     browseLetter('A');
