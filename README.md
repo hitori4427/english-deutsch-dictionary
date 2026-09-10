@@ -1,5 +1,9 @@
 # 英德電子辭典 Web/PWA 版本
 
+## 離線字庫來源
+
+內建英德詞條包含 FreeDict `eng-deu 1.9-fd1` 資料的常用詞子集。FreeDict 原始資料採 GNU GPL v2 授權；完整來源與下載資訊：<https://freedict.org/downloads/>。
+
 這是一個可在 iPad/iPhone 直接開啟使用的 Web 版，目標是「不用接電腦」也能用。
 
 ## 特點
@@ -55,4 +59,3 @@ window.ED_WEB_CONFIG = {
 ## 注意
 
 - 部分瀏覽器可能拒絕對 MiniMax API 的 CORS 呼叫；若 AI 查詢/測試按鈕顯示「查詢失敗」，可改走自建後端 Proxy，或改為純本機辭典模式。
-

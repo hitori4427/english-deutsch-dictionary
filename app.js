@@ -84,15 +84,18 @@ function renderEntry(entry) {
        <div class="result-line"><strong>德文：</strong>${entry.exampleGerman}</div>`
     : '';
   const fav = favorites.includes(entry.englishWord);
+  const details = entry.source
+    ? '<div class="result-line muted">離線英德字庫（FreeDict）</div>'
+    : `<div class="result-line">詞類：${articleText(entry)} · ${entry.partOfSpeech}</div>
+       <div class="result-line"><strong>中文：</strong>${entry.chineseDefinition || '—'}</div>
+       ${examples}
+       ${verbLine}
+       <div class="result-line"><strong>複數：</strong>${entry.plural || '—'}；可數：${entry.isCountable ? '是' : '否'}</div>`;
 
   result.classList.remove('hidden');
   result.innerHTML = `
     <div class="resultTitle"><strong>${entry.englishWord}</strong> → ${entry.pronunciationText || entry.germanWord}</div>
-    <div class="result-line">詞類：${articleText(entry)} · ${entry.partOfSpeech}</div>
-    <div class="result-line"><strong>中文：</strong>${entry.chineseDefinition || '—'}</div>
-    ${examples}
-    ${verbLine}
-    <div class="result-line"><strong>複數：</strong>${entry.plural || '—'}；可數：${entry.isCountable ? '是' : '否'}</div>
+    ${details}
     <div class="actions">
       <button id="favBtn">${fav ? '移除收藏' : '加入收藏'}</button>
       <button id="aiBtn">AI 查詞補充</button>
@@ -148,7 +151,7 @@ function renderAlphabet() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=12').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=13').catch(() => {});
   });
 }
 
@@ -355,7 +358,7 @@ async function renderApp() {
   el('testBtn').addEventListener('click', testConfig);
 
   try {
-    const response = await fetch('dictionary.json?v=12', { cache: 'no-store' });
+    const response = await fetch('dictionary.json?v=13', { cache: 'no-store' });
     dictionary = await response.json();
     renderAlphabet();
     browseLetter('A');
