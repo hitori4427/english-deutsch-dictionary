@@ -1,0 +1,13 @@
+{
+  "name": "英德電子辭典",
+  "short_name": "英德辭典",
+  "description": "English → Deutsch 快速查詞（多裝置可用）",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "zh-Hant",
+  "orientation": "portrait",
+  "scope": "./",
+  "icons": []
+}
