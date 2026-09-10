@@ -151,7 +151,7 @@ function renderAlphabet() {
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=13').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=14').catch(() => {});
   });
 }
 
@@ -235,8 +235,12 @@ async function requestMiniMax(word) {
   }
   const payload = {
     model,
-    messages: [{ role: 'user', content: `請用 JSON 格式回傳：english, german, article, displayGerman, chinese, partOfSpeech, plural, level, examples, learningTip, confidence for ${word}` }],
-    max_completion_tokens: 700
+    messages: [
+      { role: 'system', content: '你是英德辭典。只回傳一個有效 JSON 物件，不要 Markdown、說明或推理文字。' },
+      { role: 'user', content: `查詢英文單字 ${word}。JSON 欄位：english, german, article, displayGerman, chinese, partOfSpeech, plural, level, examples, learningTip, confidence。examples 請包含英文與德文例句。` }
+    ],
+    reasoning_split: true,
+    max_completion_tokens: 900
   };
 
   const controller = new AbortController();
@@ -270,14 +274,59 @@ async function requestMiniMax(word) {
   }
 }
 
+function extractAIContent(responseText) {
+  let content = responseText;
+  try {
+    const envelope = JSON.parse(responseText);
+    content = envelope.choices?.[0]?.message?.content ?? responseText;
+  } catch {}
+
+  content = String(content)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    const candidate = content.slice(start, end + 1);
+    try { return JSON.parse(candidate); } catch {}
+  }
+  try { return JSON.parse(content); } catch {}
+  throw new Error('AI 已回覆，但格式無法辨識，請再查一次');
+}
+
+function aiResultLines(data) {
+  const examples = Array.isArray(data.examples)
+    ? data.examples.map((item) => typeof item === 'string' ? item : `${item.english || item.en || ''} → ${item.german || item.de || ''}`).filter(Boolean).join('；')
+    : (data.examples || '—');
+  return [
+    `${data.english || ''} → ${data.displayGerman || data.german || '—'}`,
+    `冠詞／詞類：${data.article || '—'} · ${data.partOfSpeech || '—'}`,
+    `中文：${data.chinese || '—'}`,
+    `複數：${data.plural || '—'}　程度：${data.level || '—'}`,
+    `例句：${examples}`,
+    `提示：${data.learningTip || '—'}`
+  ];
+}
+
 async function aiLookup(word) {
   const output = el('aiResult');
   output.textContent = '查詢中...';
   try {
     const txt = await requestMiniMax(word);
-    let answer = txt;
-    try { answer = JSON.parse(txt).choices?.[0]?.message?.content || txt; } catch {}
-    output.innerHTML = `<span class="success">AI 回應：</span>${String(answer).slice(0, 1000)}`;
+    const data = extractAIContent(txt);
+    output.textContent = '';
+    const title = document.createElement('strong');
+    title.className = 'success';
+    title.textContent = 'AI 查詞結果';
+    output.appendChild(title);
+    aiResultLines(data).forEach((line) => {
+      const div = document.createElement('div');
+      div.textContent = line;
+      output.appendChild(div);
+    });
     return true;
   } catch (err) {
     output.innerHTML = `<span class="error">查詢失敗：</span>${err.message}`;
@@ -332,6 +381,26 @@ function bindSearch() {
   });
 }
 
+function bindDirectAI() {
+  el('aiSearchBtn').addEventListener('click', () => {
+    const word = normalize(el('searchInput').value);
+    if (!word) {
+      el('browseHeading').textContent = '請先輸入要查詢的英文單字。';
+      return;
+    }
+    renderEntry({
+      englishWord: word,
+      germanWord: '等待 AI 查詢',
+      pronunciationText: '等待 AI 查詢',
+      partOfSpeech: '',
+      chineseDefinition: '',
+      plural: '',
+      isCountable: false
+    });
+    aiLookup(word);
+  });
+}
+
 function bindInstallPrompt() {
   const button = el('installBtn');
   window.addEventListener('beforeinstallprompt', (event) => {
@@ -355,10 +424,11 @@ async function renderApp() {
   loadSettingsToUI();
   renderFavorites();
   bindSearch();
+  bindDirectAI();
   el('testBtn').addEventListener('click', testConfig);
 
   try {
-    const response = await fetch('dictionary.json?v=13', { cache: 'no-store' });
+    const response = await fetch('dictionary.json?v=14', { cache: 'no-store' });
     dictionary = await response.json();
     renderAlphabet();
     browseLetter('A');

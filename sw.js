@@ -1,12 +1,12 @@
-const CACHE_NAME = 'ed-dict-cache-v3';
+const CACHE_NAME = 'ed-dict-cache-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './styles.css?v=13',
-  './app.js?v=13',
-  './config.js?v=13',
+  './styles.css?v=14',
+  './app.js?v=14',
+  './config.js?v=14',
   './manifest.webmanifest',
-  './dictionary.json?v=13'
+  './dictionary.json?v=14'
 ];
 
 self.addEventListener('install', (event) => {
